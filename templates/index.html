@@ -5,37 +5,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Video Downloader</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            padding: 20px;
-        }
-        input {
-            width: 90%;
-            padding: 10px;
-            margin: 10px 0;
-        }
-        button {
-            padding: 10px 20px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        @media (max-width: 600px) {
-            input {
-                width: 100%;
-            }
-        }
+        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+        input, select { width: 90%; padding: 10px; margin: 10px 0; }
+        button { padding: 10px 20px; background-color: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        @media (max-width: 600px) { input, select { width: 100%; } }
     </style>
+    <script>
+        async function fetchFormats() {
+            const url = document.getElementById("url").value;
+            if (!url) { alert("Please enter a URL"); return; }
+            
+            document.getElementById("formats").innerHTML = "<option>Loading...</option>";
+            const response = await fetch("/get_formats", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ url })
+            });
+
+            const data = await response.json();
+            if (data.error) {
+                alert("Error: " + data.error);
+                return;
+            }
+
+            const formatDropdown = document.getElementById("formats");
+            formatDropdown.innerHTML = "";
+            data.forEach(f => {
+                formatDropdown.innerHTML += `<option value="${f.format_id}">${f.resolution}p (${f.ext})</option>`;
+            });
+
+            document.getElementById("downloadSection").style.display = "block";
+        }
+    </script>
 </head>
 <body>
     <h2>Instagram & YouTube Video Downloader</h2>
-    <form method="post">
-        <input type="text" name="url" placeholder="Paste Instagram or YouTube URL here" required>
+    <input type="text" id="url" placeholder="Paste Instagram or YouTube URL here" required>
+    <button onclick="fetchFormats()">Get Resolutions</button>
+
+    <form action="/download" method="post" style="display: none;" id="downloadSection">
+        <input type="hidden" name="url" id="formUrl">
+        <select name="format_id" id="formats" required></select>
         <button type="submit">Download</button>
     </form>
 </body>

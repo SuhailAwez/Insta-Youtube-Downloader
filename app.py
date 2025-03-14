@@ -7,17 +7,24 @@ app = Flask(__name__)
 
 def get_video_formats(url):
     options = {"quiet": False, "nocheckcertificate": True}
+
     try:
         with yt_dlp.YoutubeDL(options) as ydl:
             info = ydl.extract_info(url, download=False)
-            print(info)  # Log details for debugging
-            return [
+            print(info)  # Debugging: Check the extracted info
+            
+            # Extract available resolutions
+            formats = [
                 {"format_id": f["format_id"], "resolution": f.get("height", "Unknown"), "ext": f["ext"]}
-                for f in info["formats"] if f.get("height")
+                for f in info.get("formats", []) if f.get("height")
             ]
+            
+            print("Available formats:", formats)  # Debugging output
+            return formats
     except Exception as e:
         print(f"Error fetching formats: {e}")
         return []
+
 
 
 def download_video(url, format_id):

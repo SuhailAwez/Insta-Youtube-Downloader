@@ -1,78 +1,58 @@
-from flask import Flask, render_template, request, send_file, jsonify
-import yt_dlp
-import os
+from flask import Flask, request, render_template, jsonify
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 import time
 
 app = Flask(__name__)
 
-def get_video_formats(url):
-    options = {"quiet": False, "nocheckcertificate": True}
+# Function to get download link from Y2Mate
+def get_youtube_download_link(video_url):
+    options = webdriver.ChromeOptions()
+    options.add_argument("--headless")  # Run in headless mode
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
 
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    driver.get("https://www.y2mate.com/")
+
+    # Find input box and submit video URL
+    search_box = driver.find_element(By.NAME, "query")
+    search_box.send_keys(video_url)
+    search_box.send_keys(Keys.RETURN)
+
+    time.sleep(5)  # Wait for the page to load
+
+    # Extract download link
     try:
-        with yt_dlp.YoutubeDL(options) as ydl:
-            info = ydl.extract_info(url, download=False)
-            print(info)  # Debugging: Check the extracted info
-            
-            # Extract available resolutions
-            formats = [
-                {"format_id": f["format_id"], "resolution": f.get("height", "Unknown"), "ext": f["ext"]}
-                for f in info.get("formats", []) if f.get("height")
-            ]
-            
-            print("Available formats:", formats)  # Debugging output
-            return formats
-    except Exception as e:
-        print(f"Error fetching formats: {e}")
-        return []
+        download_button = driver.find_element(By.XPATH, "//a[contains(text(), 'Download')]")
+        download_url = download_button.get_attribute("href")
+    except:
+        download_url = None
 
+    driver.quit()
+    return download_url
 
-
-def download_video(url, format_id):
-    """Download video in the selected resolution."""
-    options = {
-        "format": format_id,
-        "outtmpl": "%(title)s.%(ext)s",
-    }
-    with yt_dlp.YoutubeDL(options) as ydl:
-        info = ydl.extract_info(url, download=True)
-        filename = ydl.prepare_filename(info)
-    return os.path.abspath(filename), os.path.basename(filename)
-
-@app.route("/", methods=["GET", "POST"])
+@app.route("/", methods=["GET"])
 def index():
     return render_template("index.html")
 
-@app.route("/get_formats", methods=["POST"])
-def get_formats():
-    url = request.json.get("url")
-    try:
-        formats = get_video_formats(url)
-        return jsonify(formats)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
 @app.route("/download", methods=["POST"])
 def download():
-    url = request.form["url"]
-    format_id = request.form["format_id"]
-
-    try:
-        file_path, filename = download_video(url, format_id)
-        
-        if not os.path.exists(file_path):
-            return "Error: Video download failed.", 500
-
-        time.sleep(1)  # Ensure file is fully saved before sending
-
-        return send_file(
-            file_path,
-            as_attachment=True,
-            mimetype="video/mp4",
-            download_name=filename
-        )
-    except Exception as e:
-        return f"Error: {str(e)}", 500
+    video_url = request.form.get("video_url")
+    
+    if not video_url:
+        return jsonify({"error": "No video URL provided"}), 400
+    
+    download_link = get_youtube_download_link(video_url)
+    
+    if not download_link:
+        return jsonify({"error": "Failed to fetch download link"}), 500
+    
+    return jsonify({"download_link": download_link})
 
 if __name__ == "__main__":
     app.run(debug=True)
-
